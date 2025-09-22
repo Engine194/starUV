@@ -6,6 +6,9 @@
 #include "SD.h"
 #include "SPI.h"
 #include <SHA1Builder.h>
+#include <base64.hpp>
+#include <ArduinoJson.h>
+
 
 int sck = 18;
 int miso = 19;
@@ -21,8 +24,31 @@ static unsigned char _bearer[20];
 
 WebServer server(80);
 
-const char *www_username = "admin";
-const char *www_password = "6adfb183a4a2c94a2f92dab5ade762a47889a5a1";
+struct PasswordStruct {
+  const char* value;
+  const char* date;
+};
+
+char www_username[127] = "admin";
+char www_password[127];
+
+int splitString(String inputString, char delimiter, String outputArray[], int arraySize) {
+  int startIndex = 0;
+  int endIndex = 0;
+  int arrayIndex = 0;
+
+  while (endIndex != -1 && arrayIndex < arraySize) {
+    endIndex = inputString.indexOf(delimiter, startIndex);
+
+    if (endIndex == -1) { // No more delimiters, get the rest of the string
+      outputArray[arrayIndex++] = inputString.substring(startIndex);
+    } else { // Delimiter found
+      outputArray[arrayIndex++] = inputString.substring(startIndex, endIndex);
+      startIndex = endIndex + 1;
+    }
+  }
+  return arrayIndex; // Return the number of substrings found
+}
 
 String *check_bearer_or_auth(HTTPAuthMethod mode, String authReq, String params[]) {
   // we expect authReq to be "bearer some-secret"
@@ -47,7 +73,9 @@ String *check_bearer_or_auth(HTTPAuthMethod mode, String authReq, String params[
       Serial.println("Bearer token does not match");
     }
   } else if (mode == BASIC_AUTH) {
-    bool ret = server.authenticateBasicSHA1(www_username, www_password);
+    const char *username = (const char*)www_username;
+    const char *password = (const char*)www_password;
+    bool ret = server.authenticateBasicSHA1(username, password);
     if (ret) {
       Serial.println("Basic auth succeeded");
       return new String(params[0]);
@@ -60,22 +88,34 @@ String *check_bearer_or_auth(HTTPAuthMethod mode, String authReq, String params[
   return NULL;
 };
 
-void readFile(fs::FS &fs, const char *path)
+String extractUuidFromRequest(String authorization) {
+  String rawCredential = authorization.substring(6);
+  unsigned char base64[rawCredential.length() + 1];
+  strcpy(reinterpret_cast<char*>(base64), rawCredential.c_str());
+  unsigned char credential_c_str[255];
+  unsigned int string_length = decode_base64(base64, credential_c_str);
+  credential_c_str[string_length] = '\0';
+  String credential = reinterpret_cast<char*>(credential_c_str);
+  String splitedParams[2];
+  splitString(credential, ':', splitedParams, 2);
+  return splitedParams[0];
+}
+
+void readFile(fs::FS &fs, const char *path, char* result)
 {
   Serial.printf("Reading file: %s\n", path);
-
   File file = fs.open(path);
   if (!file)
   {
     Serial.println("Failed to open file for reading");
     return;
   }
-
-  Serial.print("Read from file: ");
-  while (file.available())
-  {
-    Serial.write(file.read());
+  size_t bytesRead = 0;
+  while (file.available()) {
+    result[bytesRead] = (char)file.read();
+    bytesRead++;
   }
+  result[bytesRead] = '\0'; // Null-terminate the string
   file.close();
 }
 
@@ -104,8 +144,42 @@ void setup()
     Serial.println("Bearer token does not look like a valid SHA1 hex string ?!");
   }
 
-  server.on("/", HTTP_GET, []()
+  server.on("/", HTTP_GET, []() // HTTP_POST HTTP_PUT HTTP_DELETE #CRUD - Create Read Update Delete // handler
     {
+      strcpy(www_password, "");
+      String uuid = extractUuidFromRequest(server.header("Authorization"));
+      if (uuid.isEmpty()) {
+        Serial.println("No/failed UUID");
+        return server.requestAuthentication();
+      } else {
+        strcpy(www_username, uuid.c_str());
+        char paths[] = "/auth/";
+        strcat(paths, www_username);
+        strcat(paths, ".json");
+        char fileContent[1024];
+        readFile(SD, paths, fileContent);
+        StaticJsonDocument<1024> doc;
+        DeserializationError error = deserializeJson(doc, fileContent);
+
+        // Check for parsing errors
+        if (error) {
+          Serial.print(F("deserializeJson() failed: "));
+          Serial.println(error.f_str());
+          return server.requestAuthentication();
+        }
+
+        PasswordStruct password;
+        password.value =  doc["passwords"][0]["value"];
+        password.date = doc["passwords"][0]["date"];
+        if (password.value != NULL && strlen(password.value) != 0) {
+          strcpy(www_password, password.value);
+        } else {
+          Serial.println("No/failed UUID");
+          return server.requestAuthentication();
+        }
+
+      }
+
       if (!server.authenticate(&check_bearer_or_auth)) {
         Serial.println("No/failed authentication");
         return server.requestAuthentication();

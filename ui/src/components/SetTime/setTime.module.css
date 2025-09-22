@@ -1,0 +1,32 @@
+.root {
+  margin-top: 2rem;
+  padding: 1rem 0.75rem;
+  border-radius: 0.25rem;
+  border: 1px solid grey;
+}
+
+.heading {
+  font-size: 1.2rem;
+  margin-bottom: 1rem;
+  margin-top: 0;
+}
+
+.timeForm {
+  display: grid;
+  align-items: center;
+  justify-content: space-between;
+  grid-template-columns: 1fr auto;
+}
+
+.timeDisplay {
+  display: flex;
+  align-items: center;
+  column-gap: 0.25rem;
+}
+
+.explain {
+  justify-content: center;
+  padding: 0;
+  margin-top: 0;
+  margin-bottom: 0.5rem;
+}
