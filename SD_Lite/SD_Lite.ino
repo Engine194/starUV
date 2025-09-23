@@ -19,6 +19,9 @@ String secret_token_hex = "5715790a892990382d98858c4aa38d0617151575";
 
 const char *ssid = "Engine194";
 const char *password = "Engine194";
+const char *UNAUTHORIZED = "Unauthorized";
+const char *INTERNAL_SERVER_ERROR = "Internal server error";
+const char *BAD_REQUEST = "Bad request";
 
 static unsigned char _bearer[20];
 
@@ -27,6 +30,14 @@ WebServer server(80);
 struct PasswordStruct {
   const char* value;
   const char* date;
+};
+
+struct CycleStruct {
+  char* start;
+  char* end;
+  int day[7];
+  int fan_enable;
+  int fan_delay;
 };
 
 char www_username[127] = "admin";
@@ -101,6 +112,61 @@ String extractUuidFromRequest(String authorization) {
   return splitedParams[0];
 }
 
+bool checkAuthenFromSD (WebServer* server, fs::FS &fs) {
+  strcpy(www_password, "");
+  strcpy(www_username, "");
+  String uuid = extractUuidFromRequest(server->header("Authorization"));
+  if (uuid.isEmpty()) {
+    return false;
+  } else {
+    strcpy(www_username, uuid.c_str());
+    char fileContent[1024] = "";
+    char path[] = "/auth/";
+    getJsonFromFile(fs, path, fileContent);
+    StaticJsonDocument<1024> doc;
+    DeserializationError error = deserializeJson(doc, fileContent);
+
+    // Check for parsing errors
+    if (error) {
+      Serial.print(F("deserializeJson() failed: "));
+      Serial.println(error.f_str());
+      return false;
+    }
+
+    PasswordStruct password;
+    password.value =  doc["passwords"][0]["value"];
+    password.date = doc["passwords"][0]["date"];
+    Serial.println(password.value);
+
+    if (password.value != NULL && strlen(password.value) != 0) {
+      strcpy(www_password, password.value);
+    } else {
+      return false;
+    }
+  }
+
+  return server->authenticate(&check_bearer_or_auth);
+}
+
+bool writeFile(fs::FS &fs, const char *path, const char *message) {
+  Serial.printf("Writing file: %s\n", path);
+  bool result = true;
+
+  File file = fs.open(path, FILE_WRITE);
+  if (!file) {
+    Serial.println("Failed to open file for writing");
+    return false;
+  }
+  if (file.print(message)) {
+    Serial.println("File written");
+  } else {
+    Serial.println("Write failed");
+    result = false;
+  }
+  file.close();
+  return result;
+}
+
 void readFile(fs::FS &fs, const char *path, char* result)
 {
   Serial.printf("Reading file: %s\n", path);
@@ -118,6 +184,12 @@ void readFile(fs::FS &fs, const char *path, char* result)
   result[bytesRead] = '\0'; // Null-terminate the string
   file.close();
 }
+
+void getJsonFromFile(fs::FS &fs, char *path, char* fileContent) {
+  strcat(path, www_username);
+  strcat(path, ".json");
+  readFile(SD, path, fileContent);
+};
 
 void setup()
 {
@@ -144,43 +216,71 @@ void setup()
     Serial.println("Bearer token does not look like a valid SHA1 hex string ?!");
   }
 
-  server.on("/", HTTP_GET, []() // HTTP_POST HTTP_PUT HTTP_DELETE #CRUD - Create Read Update Delete // handler
-    {
-      strcpy(www_password, "");
-      String uuid = extractUuidFromRequest(server.header("Authorization"));
-      if (uuid.isEmpty()) {
-        Serial.println("No/failed UUID");
-        return server.requestAuthentication();
-      } else {
-        strcpy(www_username, uuid.c_str());
-        char paths[] = "/auth/";
-        strcat(paths, www_username);
-        strcat(paths, ".json");
-        char fileContent[1024];
-        readFile(SD, paths, fileContent);
-        StaticJsonDocument<1024> doc;
-        DeserializationError error = deserializeJson(doc, fileContent);
+  server.on("/config", HTTP_GET, []() {
+    bool authed = checkAuthenFromSD(&server, SD);
+    if (!authed) {
+      return server.send(401, "text/plain", UNAUTHORIZED);
+    }
+    char fileContent[1024] = "";
+    char path[] = "/config/";
+    getJsonFromFile(SD, path, fileContent);
+    String response = fileContent;
+    server.send(200, "json/application", response);
+  });
 
-        // Check for parsing errors
-        if (error) {
-          Serial.print(F("deserializeJson() failed: "));
-          Serial.println(error.f_str());
-          return server.requestAuthentication();
-        }
+  server.on("/cycles", HTTP_POST, []() {
+    bool authed = checkAuthenFromSD(&server, SD);
+    if (!authed) {
+      return server.send(401, "text/plain", UNAUTHORIZED);
+    }
+    if (server.method() == HTTP_POST) {
+      String requestBody = server.arg("plain");
+      StaticJsonDocument<1024> doc;
+      DeserializationError error = deserializeJson(doc, requestBody);
 
-        PasswordStruct password;
-        password.value =  doc["passwords"][0]["value"];
-        password.date = doc["passwords"][0]["date"];
-        if (password.value != NULL && strlen(password.value) != 0) {
-          strcpy(www_password, password.value);
-        } else {
-          Serial.println("No/failed UUID");
-          return server.requestAuthentication();
-        }
-
+      // Check for parsing errors
+      if (error) {
+        Serial.print(F("deserializeJson() request body failed: "));
+        Serial.println(error.f_str());
+        return server.send(400, "text/plain", BAD_REQUEST);
       }
 
-      if (!server.authenticate(&check_bearer_or_auth)) {
+      char fileContent[1024] = "";
+      char path[] = "/config/";
+      getJsonFromFile(SD, path, fileContent);
+      DynamicJsonDocument configDoc(1024);
+      error = deserializeJson(configDoc, fileContent);
+      if (error) {
+        Serial.print(F("deserializeJson() config failed: "));
+        Serial.println(error.f_str());
+        return server.send(500, "text/plain", INTERNAL_SERVER_ERROR);
+      }
+      int currentCounter = configDoc["cycle_counter"];
+      int nextCounter = currentCounter + 1;
+      configDoc["cycle_counter"] = nextCounter;
+      JsonArray cycles = configDoc["cycles"].as<JsonArray>();
+      JsonObject newCycle = cycles.createNestedObject();
+      newCycle["id"] = nextCounter;
+      newCycle["start"] = doc["start"];
+      newCycle["end"] = doc["end"];
+      JsonArray day = newCycle.createNestedArray("day");
+      day.set(doc["day"].as<JsonArray>());
+      newCycle["fan_enable"] = doc["fan_enable"];
+      newCycle["fan_delay"] = doc["fan_delay"];
+      char updatedContent[1024];
+      serializeJson(configDoc, updatedContent);
+      bool success = writeFile(SD, path, updatedContent);
+      if (!success) {
+        return server.send(500, "text/plain", INTERNAL_SERVER_ERROR);
+      }
+      return server.send(200, "text/plain", "ok");
+    }
+  });
+
+  server.on("/", HTTP_GET, []()
+    {
+      bool authed = checkAuthenFromSD(&server, SD);
+      if (!authed) {
         Serial.println("No/failed authentication");
         return server.requestAuthentication();
       }

@@ -1,30 +1,30 @@
-import React from "react";
+import React, { useEffect } from "react";
 import { useI18nContext } from "../../contexts/i18nContext";
 import classes from "./cycles.module.css";
 import ListCycle from "./_listCycle";
-import { useStoreContext } from "../../contexts/storeContext";
+import { useDispatch, useStoreContext } from "../../contexts/storeContext";
+import { STORE_ACTION_TYPES } from "../../contexts/actions";
 
 const Cycles = () => {
   const t = useI18nContext();
   const { cycles } = useStoreContext();
+  const dispatch = useDispatch();
+
+  useEffect(() => {
+    fetch(`${window.location.origin}/config`)
+      .then((res) => res.json())
+      .then((data) => {
+        dispatch({
+          type: STORE_ACTION_TYPES.GET_CYCLES,
+          payload: data?.cycles || [],
+        });
+      });
+  }, [dispatch]);
+
   return (
     <section className={classes.root}>
       <h2 className={classes.heading}>{t({ id: "cycles", mask: "Cycles" })}</h2>
       <ListCycle data={cycles} />
-      {/* <form className={classes.timeForm} onSubmit={(e) => e.preventDefault()}>
-        <p className={classes.explain}>
-          {t({ id: "time.explain", mask: "Hour : Minute : Second" })}
-        </p>
-        <span></span>
-        <div className={classes.timeDisplay}>
-          <input name="hour" type="number" min={0} max={23} />
-          <span>{":"}</span>
-          <input name="minute" type="number" min={0} max={59} />
-          <span>{":"}</span>
-          <input name="second" type="number" min={0} max={59} />
-        </div>
-        <button type="submit">{t({ id: "save" })}</button>
-      </form> */}
     </section>
   );
 };
