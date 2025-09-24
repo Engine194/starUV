@@ -244,12 +244,12 @@ void setup()
     if (now.IsValid()) {
       char str[25];
       sprintf(str, "%d-%d-%dT%d:%d:%d.000Z",       
-              currentTime.Year(), 
-              currentTime.Month(), 
-              currentTime.Day(),    
-              currentTime.Hour(),  
-              currentTime.Minute(),
-              currentTime.Second() 
+              now.Year(), 
+              now.Month(), 
+              now.Day(),    
+              now.Hour(),  
+              now.Minute(),
+              now.Second() 
             );
       doc["time"] = str;
     } else {
@@ -265,7 +265,7 @@ void setup()
     if (!authed) {
       return server.send(401, "text/plain", UNAUTHORIZED);
     }
-    
+
     String requestBody = server.arg("plain");
     StaticJsonDocument<1024> doc;
     DeserializationError error = deserializeJson(doc, requestBody);
@@ -287,7 +287,7 @@ void setup()
       Rtc.SetIsRunning(true);
     }
     RtcDateTime now = Rtc.GetDateTime();
-    if(now.isValid()){
+    if(now.IsValid()){
       return server.send(200, "text/plain", "ok");
     }
       return server.send(400, "text/plain", BAD_REQUEST);
