@@ -251,7 +251,7 @@ void setup()
     RtcDateTime now = Rtc.GetDateTime();
     if (now.IsValid()) {
       char str[25];
-      sprintf(str, "%d-%d-%dT%d:%d:%d.000Z",       
+      sprintf(str, "%04d-%02d-%02dT%02d:%02d:%02d.000Z",       
               now.Year(), 
               now.Month(), 
               now.Day(),    
