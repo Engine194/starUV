@@ -8,12 +8,21 @@
 #include <SHA1Builder.h>
 #include <base64.hpp>
 #include <ArduinoJson.h>
-
+#include <ThreeWire.h>
+#include <RtcDS1302.h>
 
 int sck = 18;
 int miso = 19;
 int mosi = 23;
 int cs = 5;
+
+//connect Time module
+const int IO = 27;    // DAT
+const int SCLK = 14;  // CLK
+const int CE = 26;    // RST
+
+ThreeWire myWire(IO, SCLK, CE);
+RtcDS1302<ThreeWire> Rtc(myWire);
 
 String secret_token_hex = "5715790a892990382d98858c4aa38d0617151575";
 
@@ -201,7 +210,6 @@ void getJsonFromFile(fs::FS &fs, char *path, char* fileContent) {
 void setup()
 {
   Serial.begin(115200);
-
   SPI.begin(sck, miso, mosi, cs);
   if (!SD.begin())
   {
@@ -213,7 +221,7 @@ void setup()
     log_e("Soft AP creation failed.");
     while (1);
   }
-  
+  Rtc.Begin();
   IPAddress myIP = WiFi.softAPIP();
   ArduinoOTA.begin();
 
@@ -234,6 +242,64 @@ void setup()
     getJsonFromFile(SD, path, fileContent);
     String response = fileContent;
     server.send(200, JSON_APPLICATION, response);
+  });
+
+    //Get present time
+  server.on("/time", HTTP_GET, []() {
+    DynamicJsonDocument doc(100);
+
+    RtcDateTime now = Rtc.GetDateTime();
+    if (now.IsValid()) {
+      char str[25];
+      sprintf(str, "%d-%d-%dT%d:%d:%d.000Z",       
+              now.Year(), 
+              now.Month(), 
+              now.Day(),    
+              now.Hour(),  
+              now.Minute(),
+              now.Second() 
+            );
+      doc["time"] = str;
+    } else {
+      doc["time"] = "1970-01-01T00:00:00.000Z";
+    }
+    char time_json[100];
+    serializeJson(doc, time_json);
+    server.send(200, "json/application", time_json);
+  });
+
+  server.on("/time", HTTP_POST, [&]() {
+    bool authed = checkAuthenFromSD(&server, SD);
+    if (!authed) {
+      return server.send(401, "text/plain", UNAUTHORIZED);
+    }
+
+    String requestBody = server.arg("plain");
+    StaticJsonDocument<1024> doc;
+    DeserializationError error = deserializeJson(doc, requestBody);
+
+    // Check for parsing errors
+    if (error) {
+      Serial.print(F("deserializeJson() request body failed: "));
+      Serial.println(error.f_str());
+      return server.send(400, "text/plain", BAD_REQUEST);
+    }
+    // doc = {"year": 2025, "month": 1, "day" : 3, "hour": 2, "minute": 34, "second": 0}
+    RtcDateTime newTime(doc["year"], doc["month"], doc["day"], doc["hour"], doc["minute"], doc["second"]);
+    Rtc.SetDateTime(newTime);
+
+    if (Rtc.GetIsWriteProtected()) {
+      Rtc.SetIsWriteProtected(false);
+    }
+    if (!Rtc.GetIsRunning()) {
+      Rtc.SetIsRunning(true);
+    }
+    RtcDateTime now = Rtc.GetDateTime();
+    if(now.IsValid()){
+      return server.send(200, "text/plain", "ok");
+    }
+      return server.send(400, "text/plain", BAD_REQUEST);
+    
   });
 
   server.on("/cycles", HTTP_POST, []() {
