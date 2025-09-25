@@ -276,7 +276,7 @@ void setup()
       Serial.println(error.f_str());
       return server.send(400, "text/plain", BAD_REQUEST);
     }
-    // doc = {"year": 2025, "month": 1, "day" : 3, "hour": }
+    // doc = {"year": 2025, "month": 1, "day" : 3, "hour": 2, "minute": 34, "second": 0}
     RtcDateTime newTime(doc["year"], doc["month"], doc["day"], doc["hour"], doc["minute"], doc["second"]);
     Rtc.SetDateTime(newTime);
 
