@@ -2,5 +2,6 @@
   "staruv.dashboard": "StarUV Dashboard",
   "save": "Save",
   "time.explain":  "Hour : Minute : Second",
-  "cycles": "Cycles"
+  "cycles": "Cycles",
+  "status": "Status"
 }
