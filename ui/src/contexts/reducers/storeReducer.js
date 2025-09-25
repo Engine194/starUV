@@ -31,6 +31,17 @@ export const storeReducer = (state, action) => {
         return state;
       }
     }
+    case STORE_ACTION_TYPES.DELETE_CYCLE: {
+      const cycleId = payload.id;
+      const findCycle = state.cycles.findIndex(({ id }) => id === cycleId);
+      if (findCycle >= 0) {
+        const nextCycles = [...state.cycles];
+        nextCycles.splice(findCycle, 1);
+        return { ...state, cycles: nextCycles };
+      } else {
+        return state;
+      }
+    }
     default:
       return state;
   }

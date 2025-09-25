@@ -6,14 +6,13 @@ export const daysMap = new Map([
 export const timeSelections = {
   hour: Array.from({ length: 24 }).map((_, index) => index),
   minute: Array.from({ length: 60 }).map((_, index) => index),
-  second: Array.from({ length: 60 }).map((_, index) => index),
 };
 
 export const combineTimeComponents = (components) => {
-  const { hour = 0, minute = 0, second = 0 } = components || {};
+  const { hour = 0, minute = 0 } = components || {};
   return `${hour.toString().padStart(2, "0")}:${minute
     .toString()
-    .padStart(2, "0")}:${second.toString().padStart(2, "0")}`;
+    .padStart(2, "0")}`;
 };
 
 /**
@@ -21,7 +20,7 @@ export const combineTimeComponents = (components) => {
  * with numeric hour, minute, and second properties.
  *
  * @param {string} timeString - The time string to parse (e.g., '12:34:56').
- * @returns {{ hour: number, minute: number, second: number }} The parsed time components.
+ * @returns {{ hour: number, minute: number }} The parsed time components.
  */
 export const getTimeComponents = (timeString) => {
   // timeString: hh:mm:ss
@@ -29,6 +28,5 @@ export const getTimeComponents = (timeString) => {
   return {
     hour: Number(components[0]),
     minute: Number(components[1]),
-    second: Number(components[2]),
   };
 };

@@ -20,6 +20,18 @@
   border-radius: 0.25rem;
 }
 
+.cycleStatus {
+  display: flex;
+  align-items: center;
+  column-gap: 0.5rem;
+  justify-content: space-between;
+}
+
+.status {
+  font-weight: bold;
+  font-size: large;
+}
+
 .clock {
   padding-inline: 0.5rem;
   padding-block: 0.75rem 0.5rem;

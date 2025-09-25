@@ -4,20 +4,20 @@ import { getTimeComponents, timeSelections } from "../../utils";
 import Picker from "react-mobile-picker";
 
 const TimeInput = (props) => {
-  const { name = "time", setValue, initialValue } = props || {};
+  const { name = "time", setValue, disabled, initialValue } = props || {};
   const [pickerValue, setPickerValue] = useState(
     initialValue
       ? getTimeComponents(initialValue)
       : {
           hour: 0,
           minute: 0,
-          second: 0,
         }
   );
 
   return (
     <div className={classes.root}>
       <Picker
+        disabled={disabled}
         name={name}
         value={pickerValue}
         onChange={(value) => {

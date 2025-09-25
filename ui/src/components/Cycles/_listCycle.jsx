@@ -14,12 +14,23 @@ const ListCycle = (props) => {
     <ul className={classes.root}>
       {data?.length
         ? data.map((item, index) => {
-            const { id, start, end, day, fan_delay, fan_enable } = item;
+            const { id, start, end, day, status, fan_delay, fan_enable } = item;
             return (
               <li key={id} className={classes.cycle}>
                 <CycleAction
                   {...{ data: item, selectState, className: classes.action }}
                 />
+                <div className={classes.cycleStatus}>
+                  <span>
+                    {t({ id: "status", mask: "Status" })}
+                    {""}
+                  </span>
+                  <span className={classes.status}>
+                    {status
+                      ? t({ id: "on", mask: "ON" })
+                      : t({ id: "off", mask: "OFF" })}
+                  </span>
+                </div>
                 <div className={classes.clock}>
                   <p>
                     <span>

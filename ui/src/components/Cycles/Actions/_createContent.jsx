@@ -3,52 +3,52 @@ import { useDispatch, useStoreContext } from "../../../contexts/storeContext";
 import { useI18nContext } from "../../../contexts/i18nContext";
 import TimeInput from "../../TimeInput";
 import DelayInput from "../../DelayInput";
-import {
-  classNames,
-  combineTimeComponents,
-  daysMap,
-  shallowCompareObject,
-} from "../../../utils";
+import { classNames, combineTimeComponents, daysMap } from "../../../utils";
+import classes from "./_createContent.module.css";
 import { STORE_ACTION_TYPES } from "../../../contexts/actions";
-import classes from "./_updateContent.module.css";
 
-const UpdateContent = (props) => {
-  const { data, onClose } = props;
+const initialData = {
+  status: 1,
+  start: "00:00",
+  end: "00:30",
+  day: [1, 1, 1, 1, 1, 1],
+  fan_enable: 1,
+  fan_delay: 30,
+};
+
+const CreateContent = (props) => {
+  const { onClose } = props;
+  const [cycle, setCycle] = useState({ ...initialData });
   const [loading, setLoading] = useState(false);
-  const [cycle, setCycle] = useState(data);
   const dispatch = useDispatch();
-  const { day, start, status, end, fan_enable, fan_delay } = cycle;
+  const { day, status, start, end, fan_enable, fan_delay } = cycle;
   const { language } = useStoreContext();
   const t = useI18nContext();
 
   const handleSubmit = useCallback(() => {
-    if (!shallowCompareObject(cycle, data)) {
-      setLoading(true);
-      fetch(`${window.location.origin}/cycles`, {
-        method: "PUT",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({ ...cycle }),
+    setLoading(true);
+    fetch(`${window.location.origin}/cycles`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ ...cycle }),
+    })
+      .then((res) => res.json())
+      .then((response) => {
+        console.log("response...", response);
+        if (response?.id) {
+          dispatch({
+            type: STORE_ACTION_TYPES.ADD_CYCLE,
+            payload: { ...response },
+          });
+          onClose && onClose();
+        }
       })
-        .then((res) => res.json())
-        .then((response) => {
-          console.log("response...", response);
-          if (response?.id) {
-            dispatch({
-              type: STORE_ACTION_TYPES.UPDATE_CYCLE,
-              payload: { ...response },
-            });
-            onClose && onClose();
-          }
-        })
-        .finally(() => {
-          setLoading(false);
-        });
-    } else {
-      onClose && onClose();
-    }
-  }, [cycle, onClose, data, dispatch]);
+      .finally(() => {
+        setLoading(false);
+      });
+  }, [cycle, dispatch, onClose]);
 
   return (
     <React.Fragment>
@@ -58,7 +58,7 @@ const UpdateContent = (props) => {
         <span className={classes.timeSelected}>{start}</span>
       </h6>
       <TimeInput
-        initialValue={data.start}
+        initialValue={initialData.start}
         name="startTime"
         disabled={loading}
         setValue={(value) =>
@@ -75,7 +75,7 @@ const UpdateContent = (props) => {
         <span className={classes.timeSelected}>{end}</span>
       </h6>
       <TimeInput
-        initialValue={data.end}
+        initialValue={initialData.end}
         disabled={loading}
         name="endTime"
         setValue={(value) =>
@@ -142,8 +142,8 @@ const UpdateContent = (props) => {
       <h6 className={classes.title}>
         <span>{t({ id: "fan.setting", mask: "Fan setting" })}</span>
         <button
-          type="button"
           disabled={loading}
+          type="button"
           className={classes.fanEnable}
           onClick={() =>
             setCycle((prev) => {
@@ -201,15 +201,12 @@ const UpdateContent = (props) => {
         </>
       ) : null}
       <div className={classes.actionGroup}>
-        <button disabled={loading} type="button" onClick={() => setCycle(data)}>
-          {t({ id: "reset", mask: "Reset" })}
-        </button>
         <button disabled={loading} type="button" onClick={handleSubmit}>
-          {t({ id: "save", mask: "Save" })}
+          {t({ id: "create", mask: "Create" })}
         </button>
       </div>
     </React.Fragment>
   );
 };
 
-export default UpdateContent;
+export default CreateContent;
