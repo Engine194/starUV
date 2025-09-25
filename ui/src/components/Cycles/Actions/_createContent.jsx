@@ -11,7 +11,7 @@ const initialData = {
   status: 1,
   start: "00:00",
   end: "00:30",
-  day: [1, 1, 1, 1, 1, 1],
+  day: [1, 1, 1, 1, 1, 1, 1],
   fan_enable: 1,
   fan_delay: 30,
 };
