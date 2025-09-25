@@ -25,7 +25,16 @@ function App() {
     <>
       <header className={classes.header}>
         <div className={classes.container}>
-          <img src={logo} className={classes.logo} alt="logo" />
+          <div className={classes.logoWrapper}>
+            <img
+            width={48}
+            height={48}
+            src={logo}
+            className={classes.logo}
+            alt="logo"
+          />
+          <strong className={classes.logoTitle}>{t({id: "logo", mask: "STARUV"})}</strong>
+          </div>
           <div className={classes.languages}>
             {["EN", "VI"].map((item, index) => {
               return (

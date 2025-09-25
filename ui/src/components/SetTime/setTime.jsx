@@ -11,9 +11,22 @@ const SetTime = () => {
       </h2>
       <form className={classes.timeForm} onSubmit={(e) => e.preventDefault()}>
         <p className={classes.explain}>
+          {t({ id: "date.explain", mask: "Year / month / day" })}
+        </p>
+        <span/>
+        <div className={classes.timeDisplay}>
+          <input name="year" type="number" min={0} max={9999}/>
+          <span>{"/"}</span>
+          <input name="month" type="number" min={1} max={12} />
+          <span>{"/"}</span>
+          <input name="day" type="number" min={1} max={31} />
+        </div>
+        <span/>
+        <div className={classes.delimiter}/>
+        <p className={classes.explain}>
           {t({ id: "time.explain", mask: "Hour : Minute : Second" })}
         </p>
-        <span></span>
+        <span/>
         <div className={classes.timeDisplay}>
           <input name="hour" type="number" min={0} max={23} />
           <span>{":"}</span>

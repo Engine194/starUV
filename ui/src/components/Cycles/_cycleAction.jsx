@@ -9,7 +9,12 @@ import { classNames } from "../../utils";
 import classes from "./_cycleAction.module.css";
 
 const CycleAction = (props) => {
-  const { className = "", selectState, data } = props || {};
+  const {
+    className = "",
+    activeClassName = "",
+    selectState,
+    data,
+  } = props || {};
   const t = useI18nContext();
   const [loading, setLoading] = useState(false);
   const dispatch = useDispatch();
@@ -33,11 +38,10 @@ const CycleAction = (props) => {
         })
           .then((res) => res.json())
           .then((response) => {
-            console.log("response...", response);
             if (response?.id) {
               dispatch({
                 type: STORE_ACTION_TYPES.DELETE_CYCLE,
-                payload: { id },
+                payload: { id: response.id },
               });
               setId("");
             }
@@ -73,7 +77,11 @@ const CycleAction = (props) => {
       <button
         disabled={loading}
         type="button"
-        className={classNames(classes.mainBtn, active && classes.active)}
+        className={classNames(
+          classes.mainBtn,
+          active && classes.active,
+          active && activeClassName
+        )}
         onClick={() => setId(data.id)}
       >
         <EllipsisVertical />

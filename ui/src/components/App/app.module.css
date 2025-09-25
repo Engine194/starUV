@@ -16,6 +16,16 @@
   column-gap: 0.5rem;
 }
 
+.logoWrapper {
+  display: flex;
+  align-items: center;
+  column-gap: 0.5rem;
+}
+
+.logoTitle {
+  font-size: larger;
+}
+
 .logo {
   max-width: 3rem;
   max-height: 3rem;

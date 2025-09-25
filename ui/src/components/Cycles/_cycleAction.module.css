@@ -3,7 +3,7 @@
 }
 
 .mainBtn {
-  padding: 0.2rem 0.0125rem;
+  padding: 0.5rem 0.25rem;
   background-color: transparent;
   outline: none;
   border: 1px solid transparent;
@@ -21,6 +21,7 @@
 }
 
 .dropdownAction {
+  width: max-content;
   background-color: white;
   padding: 0.5rem;
   box-shadow: rgba(100, 100, 111, 0.2) 0px 7px 29px 0px;

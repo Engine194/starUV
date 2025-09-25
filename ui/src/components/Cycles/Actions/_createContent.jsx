@@ -3,9 +3,9 @@ import { useDispatch, useStoreContext } from "../../../contexts/storeContext";
 import { useI18nContext } from "../../../contexts/i18nContext";
 import TimeInput from "../../TimeInput";
 import DelayInput from "../../DelayInput";
+import { STORE_ACTION_TYPES } from "../../../contexts/actions";
 import { classNames, combineTimeComponents, daysMap } from "../../../utils";
 import classes from "./_createContent.module.css";
-import { STORE_ACTION_TYPES } from "../../../contexts/actions";
 
 const initialData = {
   status: 1,
@@ -20,38 +20,61 @@ const CreateContent = (props) => {
   const { onClose } = props;
   const [cycle, setCycle] = useState({ ...initialData });
   const [loading, setLoading] = useState(false);
+  const { cycles } = useStoreContext();
   const dispatch = useDispatch();
   const { day, status, start, end, fan_enable, fan_delay } = cycle;
   const { language } = useStoreContext();
   const t = useI18nContext();
 
   const handleSubmit = useCallback(() => {
-    setLoading(true);
-    fetch(`${window.location.origin}/cycles`, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({ ...cycle }),
-    })
-      .then((res) => res.json())
-      .then((response) => {
-        console.log("response...", response);
-        if (response?.id) {
-          dispatch({
-            type: STORE_ACTION_TYPES.ADD_CYCLE,
-            payload: { ...response },
-          });
-          onClose && onClose();
-        }
+    if (cycles.length < 5) {
+      setLoading(true);
+      fetch(`${window.location.origin}/cycles`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ ...cycle }),
       })
-      .finally(() => {
-        setLoading(false);
-      });
-  }, [cycle, dispatch, onClose]);
+        .then((res) => res.json())
+        .then((response) => {
+          if (response?.id) {
+            dispatch({
+              type: STORE_ACTION_TYPES.ADD_CYCLE,
+              payload: { ...response },
+            });
+            onClose && onClose();
+          }
+        })
+        .finally(() => {
+          setLoading(false);
+        });
+    }
+  }, [cycle, dispatch, onClose, cycles.length]);
 
   return (
     <React.Fragment>
+      <h6 className={classes.title}>
+        <b>{t({ id: "status", mask: "Status" })}</b>
+        <button
+          type="button"
+          disabled={loading}
+          className={classes.fanEnable}
+          onClick={() =>
+            setCycle((prev) => {
+              const next = { ...prev };
+              next.status = prev.status ? 0 : 1;
+              return next;
+            })
+          }
+        >
+          <span className={classes.fanStatus}>
+            {status
+              ? t({ id: "on", mask: "ON" })
+              : t({ id: "off", mask: "OFF" })}
+          </span>
+        </button>
+      </h6>
       <hr className={classes.divider} />
       <h6 className={classes.title}>
         <span>{t({ id: "start.time", mask: "Start time" })}</span>
@@ -119,27 +142,6 @@ const CreateContent = (props) => {
       </h6>
       <hr className={classes.divider} />
       <h6 className={classes.title}>
-        <span>{t({ id: "status", mask: "Status" })}</span>
-        <button
-          type="button"
-          disabled={loading}
-          className={classes.fanEnable}
-          onClick={() =>
-            setCycle((prev) => {
-              const next = { ...prev };
-              next.status = prev.status ? 0 : 1;
-              return next;
-            })
-          }
-        >
-          <span className={classes.fanStatus}>
-            {status
-              ? t({ id: "on", mask: "ON" })
-              : t({ id: "off", mask: "OFF" })}
-          </span>
-        </button>
-      </h6>
-      <h6 className={classes.title}>
         <span>{t({ id: "fan.setting", mask: "Fan setting" })}</span>
         <button
           disabled={loading}
@@ -200,8 +202,19 @@ const CreateContent = (props) => {
           />
         </>
       ) : null}
+      <hr className={classes.divider} />
+      <strong className={classes.note}>
+        {t({
+          id: "limit.5.cycles",
+          mask: "Note*: You can create up to 5 cycles",
+        })}
+      </strong>
       <div className={classes.actionGroup}>
-        <button disabled={loading} type="button" onClick={handleSubmit}>
+        <button
+          disabled={loading || cycles.length >= 5}
+          type="button"
+          onClick={handleSubmit}
+        >
           {t({ id: "create", mask: "Create" })}
         </button>
       </div>

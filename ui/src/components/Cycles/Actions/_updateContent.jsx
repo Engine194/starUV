@@ -33,7 +33,6 @@ const UpdateContent = (props) => {
       })
         .then((res) => res.json())
         .then((response) => {
-          console.log("response...", response);
           if (response?.id) {
             dispatch({
               type: STORE_ACTION_TYPES.UPDATE_CYCLE,
@@ -52,6 +51,27 @@ const UpdateContent = (props) => {
 
   return (
     <React.Fragment>
+      <h6 className={classes.title}>
+        <b>{t({ id: "status", mask: "Status" })}</b>
+        <button
+          type="button"
+          disabled={loading}
+          className={classes.fanEnable}
+          onClick={() =>
+            setCycle((prev) => {
+              const next = { ...prev };
+              next.status = prev.status ? 0 : 1;
+              return next;
+            })
+          }
+        >
+          <span className={classes.fanStatus}>
+            {status
+              ? t({ id: "on", mask: "ON" })
+              : t({ id: "off", mask: "OFF" })}
+          </span>
+        </button>
+      </h6>
       <hr className={classes.divider} />
       <h6 className={classes.title}>
         <span>{t({ id: "start.time", mask: "Start time" })}</span>
@@ -118,27 +138,6 @@ const UpdateContent = (props) => {
         </div>
       </h6>
       <hr className={classes.divider} />
-      <h6 className={classes.title}>
-        <span>{t({ id: "status", mask: "Status" })}</span>
-        <button
-          type="button"
-          disabled={loading}
-          className={classes.fanEnable}
-          onClick={() =>
-            setCycle((prev) => {
-              const next = { ...prev };
-              next.status = prev.status ? 0 : 1;
-              return next;
-            })
-          }
-        >
-          <span className={classes.fanStatus}>
-            {status
-              ? t({ id: "on", mask: "ON" })
-              : t({ id: "off", mask: "OFF" })}
-          </span>
-        </button>
-      </h6>
       <h6 className={classes.title}>
         <span>{t({ id: "fan.setting", mask: "Fan setting" })}</span>
         <button
