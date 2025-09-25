@@ -22,7 +22,7 @@
 }
 
 .container {
-  max-width: 30rem;
+  max-width: calc(100vw - 2rem);
   width: -webkit-fill-available;
   width: -moz-available;
   max-height: 100dvh;
@@ -67,4 +67,10 @@
 
 .content {
   margin-top: 1rem;
+}
+
+@media (min-width: 48rem) {
+  .container {
+    max-width: 30rem;
+  }
 }

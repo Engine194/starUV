@@ -9,27 +9,69 @@ import {
   daysMap,
   shallowCompareObject,
 } from "../../../utils";
-import classes from "./_updateContent.module.css";
 import { STORE_ACTION_TYPES } from "../../../contexts/actions";
+import classes from "./_updateContent.module.css";
 
 const UpdateContent = (props) => {
-  const { data } = props;
+  const { data, onClose } = props;
+  const [loading, setLoading] = useState(false);
   const [cycle, setCycle] = useState(data);
   const dispatch = useDispatch();
-  const { day, start, end, fan_enable, fan_delay } = cycle;
+  const { day, start, status, end, fan_enable, fan_delay } = cycle;
   const { language } = useStoreContext();
   const t = useI18nContext();
 
   const handleSubmit = useCallback(() => {
     if (!shallowCompareObject(cycle, data)) {
-      console.log("call api to handle update...", cycle);
-      dispatch({ type: STORE_ACTION_TYPES.UPDATE_CYCLE, payload: cycle });
+      setLoading(true);
+      fetch(`${window.location.origin}/cycles`, {
+        method: "PUT",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ ...cycle }),
+      })
+        .then((res) => res.json())
+        .then((response) => {
+          if (response?.id) {
+            dispatch({
+              type: STORE_ACTION_TYPES.UPDATE_CYCLE,
+              payload: { ...response },
+            });
+            onClose && onClose();
+          }
+        })
+        .finally(() => {
+          setLoading(false);
+        });
     } else {
+      onClose && onClose();
     }
-  }, [cycle, data, dispatch]);
+  }, [cycle, onClose, data, dispatch]);
 
   return (
     <React.Fragment>
+      <h6 className={classes.title}>
+        <b>{t({ id: "status", mask: "Status" })}</b>
+        <button
+          type="button"
+          disabled={loading}
+          className={classes.fanEnable}
+          onClick={() =>
+            setCycle((prev) => {
+              const next = { ...prev };
+              next.status = prev.status ? 0 : 1;
+              return next;
+            })
+          }
+        >
+          <span className={classes.fanStatus}>
+            {status
+              ? t({ id: "on", mask: "ON" })
+              : t({ id: "off", mask: "OFF" })}
+          </span>
+        </button>
+      </h6>
       <hr className={classes.divider} />
       <h6 className={classes.title}>
         <span>{t({ id: "start.time", mask: "Start time" })}</span>
@@ -38,6 +80,7 @@ const UpdateContent = (props) => {
       <TimeInput
         initialValue={data.start}
         name="startTime"
+        disabled={loading}
         setValue={(value) =>
           setCycle((prev) => {
             const next = { ...prev };
@@ -53,6 +96,7 @@ const UpdateContent = (props) => {
       </h6>
       <TimeInput
         initialValue={data.end}
+        disabled={loading}
         name="endTime"
         setValue={(value) =>
           setCycle((prev) => {
@@ -72,6 +116,7 @@ const UpdateContent = (props) => {
               return (
                 <button
                   type="button"
+                  disabled={loading}
                   key={label}
                   onClick={() => {
                     setCycle((prev) => {
@@ -97,6 +142,7 @@ const UpdateContent = (props) => {
         <span>{t({ id: "fan.setting", mask: "Fan setting" })}</span>
         <button
           type="button"
+          disabled={loading}
           className={classes.fanEnable}
           onClick={() =>
             setCycle((prev) => {
@@ -141,6 +187,7 @@ const UpdateContent = (props) => {
           </div>
           <DelayInput
             name={"delay"}
+            disabled={loading}
             initialValue={fan_delay}
             setValue={(value) => {
               setCycle((prev) => {
@@ -153,10 +200,10 @@ const UpdateContent = (props) => {
         </>
       ) : null}
       <div className={classes.actionGroup}>
-        <button type="button" onClick={() => setCycle(data)}>
+        <button disabled={loading} type="button" onClick={() => setCycle(data)}>
           {t({ id: "reset", mask: "Reset" })}
         </button>
-        <button type="button" onClick={handleSubmit}>
+        <button disabled={loading} type="button" onClick={handleSubmit}>
           {t({ id: "save", mask: "Save" })}
         </button>
       </div>

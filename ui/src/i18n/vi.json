@@ -2,5 +2,21 @@
   "staruv.dashboard": "Bảng điều khiển",
   "save": "Lưu",
   "time.explain": "Giờ : Phút : Giây",
-  "cycles": "Chu trình"
+  "date.explain": "Năm / Tháng / Ngày",
+  "time.setting": "Cài đặt thời gian",
+  "cycles": "Chu trình",
+  "status": "Trạng thái",
+  "on": "Bật",
+  "off": "Tắt",
+  "minute.unit": "ph",
+  "from": "Bắt đầu",
+  "to": "Kết thúc",
+  "start.time": "Thời điểm bắt đầu",
+  "end.time": "Thời điểm kết thúc",
+  "repeat.on": "Lặp lại",
+  "fan.setting": "Cài đặt quạt gió",
+  "delay": "Độ trễ",
+  "create": "Khởi tạo",
+  "update": "Cập nhật",
+  "delete": "Lược bỏ"
 }

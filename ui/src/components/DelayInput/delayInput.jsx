@@ -9,7 +9,7 @@ const selections = {
 };
 
 const DelayInput = (props) => {
-  const { name = "time", setValue, initialValue } = props || {};
+  const { name = "time", setValue, disabled, initialValue } = props || {};
   const [pickerValue, setPickerValue] = useState({
     value: initialValue || start,
   });
@@ -18,12 +18,14 @@ const DelayInput = (props) => {
     <div className={classes.root}>
       <Picker
         name={name}
+        disabled={disabled}
         value={pickerValue}
         onChange={(value) => {
           setPickerValue(value);
           setValue(value.value);
         }}
         wheelMode="normal"
+        height={150}
       >
         {Object.keys(selections).map((name) => (
           <Picker.Column key={name} name={name}>

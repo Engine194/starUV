@@ -31,6 +31,15 @@ const char *password = "Engine194";
 const char *UNAUTHORIZED = "Unauthorized";
 const char *INTERNAL_SERVER_ERROR = "Internal server error";
 const char *BAD_REQUEST = "Bad request";
+const char *NOT_FOUND = "Resource not found";
+
+const char *SUCCESS = "{\"status\": \"ok\"}";
+
+const char *PLAIN_TEXT = "text/plain";
+const char *JSON_APPLICATION = "json/application";
+
+const char *CONFIG_ROOT_PATH = "/config/";
+const char *AUTH_ROOT_PATH = "/auth/";
 
 static unsigned char _bearer[20];
 
@@ -97,10 +106,8 @@ String *check_bearer_or_auth(HTTPAuthMethod mode, String authReq, String params[
     const char *password = (const char*)www_password;
     bool ret = server.authenticateBasicSHA1(username, password);
     if (ret) {
-      Serial.println("Basic auth succeeded");
       return new String(params[0]);
     } else {
-      Serial.println("Basic auth failed");
     }
   }
 
@@ -129,8 +136,9 @@ bool checkAuthenFromSD (WebServer* server, fs::FS &fs) {
     return false;
   } else {
     strcpy(www_username, uuid.c_str());
-    char fileContent[1024] = "";
-    char path[] = "/auth/";
+    char fileContent[1024];
+    char path[128];
+    strcpy(path, AUTH_ROOT_PATH);
     getJsonFromFile(fs, path, fileContent);
     StaticJsonDocument<1024> doc;
     DeserializationError error = deserializeJson(doc, fileContent);
@@ -145,15 +153,12 @@ bool checkAuthenFromSD (WebServer* server, fs::FS &fs) {
     PasswordStruct password;
     password.value =  doc["passwords"][0]["value"];
     password.date = doc["passwords"][0]["date"];
-    Serial.println(password.value);
-
     if (password.value != NULL && strlen(password.value) != 0) {
       strcpy(www_password, password.value);
     } else {
       return false;
     }
   }
-
   return server->authenticate(&check_bearer_or_auth);
 }
 
@@ -225,15 +230,17 @@ void setup()
   }
 
   server.on("/config", HTTP_GET, []() {
+    Serial.println("[/config] - GET - start");
     bool authed = checkAuthenFromSD(&server, SD);
     if (!authed) {
-      return server.send(401, "text/plain", UNAUTHORIZED);
+      return server.send(401, PLAIN_TEXT, UNAUTHORIZED);
     }
     char fileContent[1024] = "";
-    char path[] = "/config/";
+    char path[128];
+    strcpy(path, CONFIG_ROOT_PATH);
     getJsonFromFile(SD, path, fileContent);
-    String response = fileContent;
-    server.send(200, "json/application", response);
+    Serial.println("[/config] - GET - return");
+    return server.send(200, JSON_APPLICATION, fileContent);
   });
 
     //Get present time
@@ -243,7 +250,7 @@ void setup()
     RtcDateTime now = Rtc.GetDateTime();
     if (now.IsValid()) {
       char str[25];
-      sprintf(str, "%d-%d-%dT%d:%d:%d.000Z",       
+      sprintf(str, "%04d-%02d-%02dT%02d:%02d:%02d.000Z",       
               now.Year(), 
               now.Month(), 
               now.Day(),    
@@ -265,11 +272,9 @@ void setup()
     if (!authed) {
       return server.send(401, "text/plain", UNAUTHORIZED);
     }
-
     String requestBody = server.arg("plain");
     StaticJsonDocument<1024> doc;
     DeserializationError error = deserializeJson(doc, requestBody);
-
     // Check for parsing errors
     if (error) {
       Serial.print(F("deserializeJson() request body failed: "));
@@ -277,12 +282,13 @@ void setup()
       return server.send(400, "text/plain", BAD_REQUEST);
     }
     // doc = {"year": 2025, "month": 1, "day" : 3, "hour": 2, "minute": 34, "second": 0}
-    RtcDateTime newTime(doc["year"], doc["month"], doc["day"], doc["hour"], doc["minute"], doc["second"]);
-    Rtc.SetDateTime(newTime);
-
     if (Rtc.GetIsWriteProtected()) {
       Rtc.SetIsWriteProtected(false);
     }
+    RtcDateTime newTime(
+      doc["year"], doc["month"], doc["day"], doc["hour"], doc["minute"], doc["second"]
+    );
+    Rtc.SetDateTime(newTime);
     if (!Rtc.GetIsRunning()) {
       Rtc.SetIsRunning(true);
     }
@@ -290,57 +296,155 @@ void setup()
     if(now.IsValid()){
       return server.send(200, "text/plain", "ok");
     }
-      return server.send(400, "text/plain", BAD_REQUEST);
-    
+    return server.send(400, "text/plain", BAD_REQUEST);
   });
 
   server.on("/cycles", HTTP_POST, []() {
     bool authed = checkAuthenFromSD(&server, SD);
     if (!authed) {
-      return server.send(401, "text/plain", UNAUTHORIZED);
+      return server.send(401, PLAIN_TEXT, UNAUTHORIZED);
     }
-    if (server.method() == HTTP_POST) {
-      String requestBody = server.arg("plain");
-      StaticJsonDocument<1024> doc;
-      DeserializationError error = deserializeJson(doc, requestBody);
+    String requestBody = server.arg("plain");
+    if (requestBody == NULL || requestBody.isEmpty()) {
+      server.send(400, PLAIN_TEXT, BAD_REQUEST);
+    }
+    StaticJsonDocument<128> doc;
+    DeserializationError error = deserializeJson(doc, requestBody);
+    if (error) {
+      Serial.print(F("deserializeJson() request body failed: "));
+      Serial.println(error.f_str());
+      return server.send(400, PLAIN_TEXT, BAD_REQUEST);
+    }
+    char fileContent[1024] = "";
+    char path[128];
+    strcpy(path, CONFIG_ROOT_PATH);
+    getJsonFromFile(SD, path, fileContent);
+    StaticJsonDocument<1024> configDoc;
+    error = deserializeJson(configDoc, fileContent);
+    if (error) {
+      Serial.print(F("deserializeJson() config failed: "));
+      Serial.println(error.f_str());
+      return server.send(500, PLAIN_TEXT, INTERNAL_SERVER_ERROR);
+    }
+    int currentCounter = configDoc["cycle_counter"];
+    int nextCounter = currentCounter + 1;
+    configDoc["cycle_counter"] = nextCounter;
+    JsonArray cycles = configDoc["cycles"].as<JsonArray>();
+    if (cycles.size() < 5) {
+      JsonObject newCycle = cycles.createNestedObject();
+      newCycle["id"] = nextCounter;
+      newCycle["status"] = doc["status"];
+      newCycle["start"] = doc["start"];
+      newCycle["end"] = doc["end"];
+      JsonArray newDay = newCycle.createNestedArray("day");
+      newDay.set(doc["day"].as<JsonArray>());
+      newCycle["fan_enable"] = doc["fan_enable"];
+      newCycle["fan_delay"] = doc["fan_delay"];
+      serializeJson(configDoc, fileContent);
+      bool success = writeFile(SD, path, fileContent);
+      if (!success) {
+        return server.send(500, PLAIN_TEXT, INTERNAL_SERVER_ERROR);
+      }
+      serializeJson(newCycle, fileContent);
+      return server.send(200, JSON_APPLICATION, fileContent);
+    }
+    return server.send(400, PLAIN_TEXT, BAD_REQUEST);
 
-      // Check for parsing errors
+  });
+
+  server.on("/cycles", HTTP_PUT, []() {
+    bool authed = checkAuthenFromSD(&server, SD);
+    if (!authed) {
+      return server.send(401, PLAIN_TEXT, UNAUTHORIZED);
+    }
+    String requestBody = server.arg("plain");
+    if (requestBody == NULL || requestBody.isEmpty()) {
+      server.send(400, PLAIN_TEXT, BAD_REQUEST);
+    }
+    StaticJsonDocument<128> doc;
+    DeserializationError error = deserializeJson(doc, requestBody);
+    if (error || !doc["id"]) {
       if (error) {
         Serial.print(F("deserializeJson() request body failed: "));
         Serial.println(error.f_str());
-        return server.send(400, "text/plain", BAD_REQUEST);
       }
-
-      char fileContent[1024] = "";
-      char path[] = "/config/";
-      getJsonFromFile(SD, path, fileContent);
-      DynamicJsonDocument configDoc(1024);
-      error = deserializeJson(configDoc, fileContent);
-      if (error) {
-        Serial.print(F("deserializeJson() config failed: "));
-        Serial.println(error.f_str());
-        return server.send(500, "text/plain", INTERNAL_SERVER_ERROR);
-      }
-      int currentCounter = configDoc["cycle_counter"];
-      int nextCounter = currentCounter + 1;
-      configDoc["cycle_counter"] = nextCounter;
-      JsonArray cycles = configDoc["cycles"].as<JsonArray>();
-      JsonObject newCycle = cycles.createNestedObject();
-      newCycle["id"] = nextCounter;
-      newCycle["start"] = doc["start"];
-      newCycle["end"] = doc["end"];
-      JsonArray day = newCycle.createNestedArray("day");
-      day.set(doc["day"].as<JsonArray>());
-      newCycle["fan_enable"] = doc["fan_enable"];
-      newCycle["fan_delay"] = doc["fan_delay"];
-      char updatedContent[1024];
-      serializeJson(configDoc, updatedContent);
-      bool success = writeFile(SD, path, updatedContent);
-      if (!success) {
-        return server.send(500, "text/plain", INTERNAL_SERVER_ERROR);
-      }
-      return server.send(200, "text/plain", "ok");
+      return server.send(400, PLAIN_TEXT, BAD_REQUEST);
     }
+    char fileContent[1024] = "";
+    char path[128];
+    strcpy(path, CONFIG_ROOT_PATH);
+    getJsonFromFile(SD, path, fileContent);
+    StaticJsonDocument<1024> configDoc;
+    error = deserializeJson(configDoc, fileContent);
+    if (error) {
+      Serial.print(F("deserializeJson() config failed: "));
+      Serial.println(error.f_str());
+      return server.send(500, PLAIN_TEXT, INTERNAL_SERVER_ERROR);
+    }
+    JsonArray cycles = configDoc["cycles"].as<JsonArray>();
+    for (int i = 0; i < cycles.size(); i++) {
+      JsonObject cycle = cycles[i].as<JsonObject>();
+      if (cycle["id"] != doc["id"]) {
+        continue;
+      } else {
+        cycle["status"] = doc["status"];
+        cycle["start"] = doc["start"];
+        cycle["end"] = doc["end"];
+        JsonArray updatedDay = cycle["day"].as<JsonArray>();
+        updatedDay.set(doc["day"].as<JsonArray>());
+        cycle["fan_enable"] = doc["fan_enable"];
+        cycle["fan_delay"] = doc["fan_delay"];
+        serializeJson(configDoc, fileContent);
+        bool success = writeFile(SD, path, fileContent);
+        if (!success) {
+          return server.send(500, PLAIN_TEXT, INTERNAL_SERVER_ERROR);
+        }
+        serializeJson(cycle, fileContent);
+        return server.send(200, JSON_APPLICATION, fileContent);
+      }
+    }
+    return server.send(404, PLAIN_TEXT, NOT_FOUND);
+  });
+
+  server.on("/cycles", HTTP_DELETE, []() {
+    bool authed = checkAuthenFromSD(&server, SD);
+    if (!authed) {
+      return server.send(401, PLAIN_TEXT, UNAUTHORIZED);
+    }
+    String requestId = server.arg("id");
+    if (requestId == NULL || requestId.isEmpty()) {
+      server.send(400, PLAIN_TEXT, BAD_REQUEST);
+    }
+    std::string idString = requestId.c_str(); 
+    char fileContent[1024] = "";
+    char path[128];
+    strcpy(path, CONFIG_ROOT_PATH);
+    getJsonFromFile(SD, path, fileContent);
+    StaticJsonDocument<1024> configDoc;
+    DeserializationError error = deserializeJson(configDoc, fileContent);
+    if (error) {
+      Serial.print(F("deserializeJson() config failed: "));
+      Serial.println(error.f_str());
+      return server.send(500, PLAIN_TEXT, INTERNAL_SERVER_ERROR);
+    }
+    JsonArray cycles = configDoc["cycles"].as<JsonArray>();
+    for (int i = 0; i < cycles.size(); i++) {
+      JsonObject cycle = cycles[i].as<JsonObject>();
+      if (cycle["id"] != std::__cxx11::stoi(idString)) {
+        continue;
+      } else {
+        cycles.remove(i);
+        serializeJson(configDoc, fileContent);
+        bool success = writeFile(SD, path, fileContent);
+        if (!success) {
+          return server.send(500, PLAIN_TEXT, INTERNAL_SERVER_ERROR);
+        }
+        char response[32];
+        sprintf(response, "{\"id\":%s}",requestId.c_str());
+        return server.send(200, JSON_APPLICATION ,response);
+      }
+    }
+    return server.send(404, PLAIN_TEXT, NOT_FOUND);
   });
 
   server.on("/", HTTP_GET, []()
@@ -356,7 +460,7 @@ void setup()
           server.streamFile(file, "text/html");
           file.close();
       } else {
-          server.send(404, "text/plain", "Page Not Found");
+          server.send(404, PLAIN_TEXT, NOT_FOUND);
       }
     });
 

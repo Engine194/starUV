@@ -2,8 +2,8 @@ import React, { useState } from "react";
 import { useI18nContext } from "../../contexts/i18nContext";
 import { useStoreContext } from "../../contexts/storeContext";
 import CycleAction from "./_cycleAction";
-import classes from "./_listCycle.module.css";
 import { classNames, daysMap } from "../../utils";
+import classes from "./_listCycle.module.css";
 
 const ListCycle = (props) => {
   const { data = [] } = props || {};
@@ -13,13 +13,29 @@ const ListCycle = (props) => {
   return (
     <ul className={classes.root}>
       {data?.length
-        ? data.map((item, index) => {
-            const { id, start, end, day, fan_delay, fan_enable } = item;
+        ? data.map((item) => {
+            const { id, start, end, day, status, fan_delay, fan_enable } = item;
             return (
               <li key={id} className={classes.cycle}>
                 <CycleAction
-                  {...{ data: item, selectState, className: classes.action }}
+                  {...{
+                    data: item,
+                    selectState,
+                    className: classes.action,
+                    activeClassName: classes.dropdownActive,
+                  }}
                 />
+                <div className={classes.cycleStatus}>
+                  <span className={classes.statusLabel}>
+                    {t({ id: "status", mask: "Status" })}
+                    {""}
+                  </span>
+                  <span className={classes.status}>
+                    {status
+                      ? t({ id: "on", mask: "ON" })
+                      : t({ id: "off", mask: "OFF" })}
+                  </span>
+                </div>
                 <div className={classes.clock}>
                   <p>
                     <span>
