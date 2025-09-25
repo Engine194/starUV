@@ -106,10 +106,8 @@ String *check_bearer_or_auth(HTTPAuthMethod mode, String authReq, String params[
     const char *password = (const char*)www_password;
     bool ret = server.authenticateBasicSHA1(username, password);
     if (ret) {
-      Serial.println("Basic auth succeeded");
       return new String(params[0]);
     } else {
-      Serial.println("Basic auth failed");
     }
   }
 
@@ -232,6 +230,7 @@ void setup()
   }
 
   server.on("/config", HTTP_GET, []() {
+    Serial.println("[/config] - GET - start");
     bool authed = checkAuthenFromSD(&server, SD);
     if (!authed) {
       return server.send(401, PLAIN_TEXT, UNAUTHORIZED);
@@ -240,8 +239,8 @@ void setup()
     char path[128];
     strcpy(path, CONFIG_ROOT_PATH);
     getJsonFromFile(SD, path, fileContent);
-    String response = fileContent;
-    server.send(200, JSON_APPLICATION, response);
+    Serial.println("[/config] - GET - return");
+    return server.send(200, JSON_APPLICATION, fileContent);
   });
 
     //Get present time
@@ -273,11 +272,9 @@ void setup()
     if (!authed) {
       return server.send(401, "text/plain", UNAUTHORIZED);
     }
-
     String requestBody = server.arg("plain");
     StaticJsonDocument<1024> doc;
     DeserializationError error = deserializeJson(doc, requestBody);
-
     // Check for parsing errors
     if (error) {
       Serial.print(F("deserializeJson() request body failed: "));
@@ -285,12 +282,13 @@ void setup()
       return server.send(400, "text/plain", BAD_REQUEST);
     }
     // doc = {"year": 2025, "month": 1, "day" : 3, "hour": 2, "minute": 34, "second": 0}
-    RtcDateTime newTime(doc["year"], doc["month"], doc["day"], doc["hour"], doc["minute"], doc["second"]);
-    Rtc.SetDateTime(newTime);
-
     if (Rtc.GetIsWriteProtected()) {
       Rtc.SetIsWriteProtected(false);
     }
+    RtcDateTime newTime(
+      doc["year"], doc["month"], doc["day"], doc["hour"], doc["minute"], doc["second"]
+    );
+    Rtc.SetDateTime(newTime);
     if (!Rtc.GetIsRunning()) {
       Rtc.SetIsRunning(true);
     }
@@ -298,8 +296,7 @@ void setup()
     if(now.IsValid()){
       return server.send(200, "text/plain", "ok");
     }
-      return server.send(400, "text/plain", BAD_REQUEST);
-    
+    return server.send(400, "text/plain", BAD_REQUEST);
   });
 
   server.on("/cycles", HTTP_POST, []() {
@@ -385,15 +382,11 @@ void setup()
       return server.send(500, PLAIN_TEXT, INTERNAL_SERVER_ERROR);
     }
     JsonArray cycles = configDoc["cycles"].as<JsonArray>();
-    bool found = false;
     for (int i = 0; i < cycles.size(); i++) {
       JsonObject cycle = cycles[i].as<JsonObject>();
-      Serial.println("In a loop...");
-      Serial.println(cycle);
       if (cycle["id"] != doc["id"]) {
         continue;
       } else {
-        found = true;
         cycle["status"] = doc["status"];
         cycle["start"] = doc["start"];
         cycle["end"] = doc["end"];
@@ -408,6 +401,47 @@ void setup()
         }
         serializeJson(cycle, fileContent);
         return server.send(200, JSON_APPLICATION, fileContent);
+      }
+    }
+    return server.send(404, PLAIN_TEXT, NOT_FOUND);
+  });
+
+  server.on("/cycles", HTTP_DELETE, []() {
+    bool authed = checkAuthenFromSD(&server, SD);
+    if (!authed) {
+      return server.send(401, PLAIN_TEXT, UNAUTHORIZED);
+    }
+    String requestId = server.arg("id");
+    if (requestId == NULL || requestId.isEmpty()) {
+      server.send(400, PLAIN_TEXT, BAD_REQUEST);
+    }
+    std::string idString = requestId.c_str(); 
+    char fileContent[1024] = "";
+    char path[128];
+    strcpy(path, CONFIG_ROOT_PATH);
+    getJsonFromFile(SD, path, fileContent);
+    StaticJsonDocument<1024> configDoc;
+    DeserializationError error = deserializeJson(configDoc, fileContent);
+    if (error) {
+      Serial.print(F("deserializeJson() config failed: "));
+      Serial.println(error.f_str());
+      return server.send(500, PLAIN_TEXT, INTERNAL_SERVER_ERROR);
+    }
+    JsonArray cycles = configDoc["cycles"].as<JsonArray>();
+    for (int i = 0; i < cycles.size(); i++) {
+      JsonObject cycle = cycles[i].as<JsonObject>();
+      if (cycle["id"] != std::__cxx11::stoi(idString)) {
+        continue;
+      } else {
+        cycles.remove(i);
+        serializeJson(configDoc, fileContent);
+        bool success = writeFile(SD, path, fileContent);
+        if (!success) {
+          return server.send(500, PLAIN_TEXT, INTERNAL_SERVER_ERROR);
+        }
+        char response[32];
+        sprintf(response, "{\"id\":%s}",requestId.c_str());
+        return server.send(200, JSON_APPLICATION ,response);
       }
     }
     return server.send(404, PLAIN_TEXT, NOT_FOUND);
