@@ -11,6 +11,10 @@
 #include <ThreeWire.h>
 #include <RtcDS1302.h>
 
+#define LED_UV 2
+#define FAN_UV 0
+
+//connect SD module
 int sck = 18;
 int miso = 19;
 int mosi = 23;
@@ -200,9 +204,48 @@ void getJsonFromFile(fs::FS &fs, char *path, char* fileContent) {
   readFile(SD, path, fileContent);
 };
 
+DynamicJsonDocument readFile2(fs::FS &fs, const char *path, size_t capacity = 10000)
+{
+  Serial.printf("Reading file: %s\n", path);
+
+  DynamicJsonDocument doc(capacity);
+
+  File file = fs.open(path);
+  if (!file)
+  {
+    Serial.println("Failed to open file for reading, returning empty JSON array");
+    doc.to<JsonArray>();   // return an empty array if file missing
+    return doc;
+  }
+
+  DeserializationError error = deserializeJson(doc, file);
+  file.close();
+
+  if (error)
+  {
+    Serial.print("Failed to parse JSON: ");
+    Serial.println(error.c_str());
+    doc.to<JsonArray>();  // fallback: return empty JSON array
+  }
+
+  return doc;
+}
+
+int timeToMinutes(const String &timeStr) {
+  int h, m;
+  sscanf(timeStr.c_str(), "%d:%d", &h, &m); // extract hour & minute
+  return h * 60 + m; // convert to minutes
+}
+
 void setup()
 {
   Serial.begin(115200);
+
+  pinMode(LED_UV, OUTPUT);
+  digitalWrite(LED_UV, LOW);
+  pinMode(FAN_UV, OUTPUT);
+  digitalWrite(FAN_UV, LOW);
+
   SPI.begin(sck, miso, mosi, cs);
   if (!SD.begin())
   {
@@ -368,9 +411,119 @@ void setup()
   Serial.println("/ in your browser to see it working");
 }
 
+int check = 0;             // 0 = searching, 1 = LED cycle running, 2 = FAN delay running
+int lastSelectedId = -1;   // remember which cycle is active
+int time_end = 0;          // LED off time (minutes)
+int fan_end = 0;           // FAN off time (minutes)
+
+void checkCycles() {
+  RtcDateTime now = Rtc.GetDateTime();
+  int nowMinutes = now.Hour() * 60 + now.Minute();
+  int weekday = now.DayOfWeek();
+
+  // --- Case 1: LED phase ---
+  if (check == 1) {
+    Serial.println("Check cycle = 1, LED phase");
+    if (nowMinutes >= time_end) {
+      // LED finished
+      digitalWrite(LED_UV, LOW);
+      Serial.println("LED OFF");
+
+      // Read cycle settings
+      DynamicJsonDocument doc = readFile2(SD, "/config/admin.json", 7000);
+      JsonArray cycles = doc["cycles"];
+      int totalCycles = doc["cycle_couter"].as<int>();
+
+      for (int i = 0; i < totalCycles; i++) {
+        JsonObject cycle = cycles[i];
+        if (cycle["id"].as<int>() == lastSelectedId) {
+          int fanEnable = cycle["fan_enable"].as<int>();
+          int fanDelay  = cycle["fan_delay"].as<int>();
+
+          if (fanEnable == 1) {
+            fan_end = time_end + fanDelay;
+            digitalWrite(FAN_UV, HIGH);
+            Serial.printf("FAN ON (delay %d min)\n", fanDelay);
+            check = 2; // go to FAN phase
+          } else {
+            Serial.println("FAN disabled for this cycle");
+            digitalWrite(FAN_UV, LOW);
+            check = 0; // back to searching
+            lastSelectedId = -1;
+          }
+          break; // stop loop once found
+        }
+      }
+    }
+    return;
+  }
+
+  // --- Case 2: FAN phase ---
+  if (check == 2) {
+    Serial.println("Check cycle = 2, FAN phase");
+    if (nowMinutes >= fan_end) {
+      digitalWrite(FAN_UV, LOW);
+      Serial.println("FAN OFF (delay finished)");
+      check = 0;            // back to searching
+      lastSelectedId = -1;
+    }
+    return;
+  }
+
+  // --- Case 3: searching for cycle (check == 0) ---
+  if(check == 0){
+    Serial.println("Check cycle = 0, check phase");
+    DynamicJsonDocument doc = readFile2(SD, "/config/admin.json", 7000);
+    if (doc.isNull()){
+      Serial.println("Doc is NULL");
+      return;
+    } 
+
+    JsonArray cycles = doc["cycles"];
+    if (cycles.isNull()){
+      Serial.println("Cycle is NULL");
+      return;
+    } 
+
+    int totalCycles = doc["cycle_couter"] | cycles.size(); 
+
+    int selectedId = -1;
+    JsonObject selectedCycle;
+    
+    for (int i = 0; i < totalCycles; i++) {
+      JsonObject cycle = cycles[i];
+      if (cycle.isNull()) continue;
+
+      int startM = timeToMinutes(cycle["start"].as<String>());
+      int endM   = timeToMinutes(cycle["end"].as<String>());
+
+      if (cycle["day"][weekday] == 1 &&
+          nowMinutes >= startM && nowMinutes <= endM) {
+        int cid = cycle["id"].as<int>();
+        if (selectedId == -1 || cid < selectedId) {
+          selectedId = cid;
+          selectedCycle = cycle;
+        }
+      }
+    }
+
+    if (selectedId != -1) {
+      Serial.printf("Cycle %d started → LED ON\n", selectedId);
+      digitalWrite(LED_UV, HIGH);
+      digitalWrite(FAN_UV, LOW); // fan waits until LED ends
+      time_end = timeToMinutes(selectedCycle["end"].as<String>());
+      check = 1;                 // LED phase
+      lastSelectedId = selectedId;
+    }
+  }
+  
+}
+
 void loop()
 {
   ArduinoOTA.handle();
   server.handleClient();
-  delay(2); // allow the cpu to switch to other tasks
+  delay(1000); // allow the cpu to switch to other tasks
+  checkCycles();
+  delay(1000);
 }
