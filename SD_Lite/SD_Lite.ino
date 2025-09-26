@@ -246,7 +246,13 @@ void setup()
     //Get present time
   server.on("/time", HTTP_GET, []() {
     DynamicJsonDocument doc(100);
-
+    if (!Rtc.GetIsRunning()) {
+      Serial.println("RTC was not actively running, starting now");
+      Rtc.SetIsRunning(true);
+    }
+    if (Rtc.GetIsWriteProtected()) {
+      Rtc.SetIsWriteProtected(false);
+    }
     RtcDateTime now = Rtc.GetDateTime();
     if (now.IsValid()) {
       char str[25];
@@ -270,7 +276,7 @@ void setup()
   server.on("/time", HTTP_POST, [&]() {
     bool authed = checkAuthenFromSD(&server, SD);
     if (!authed) {
-      return server.send(401, "text/plain", UNAUTHORIZED);
+      return server.send(401, PLAIN_TEXT, UNAUTHORIZED);
     }
     String requestBody = server.arg("plain");
     StaticJsonDocument<1024> doc;
@@ -279,24 +285,25 @@ void setup()
     if (error) {
       Serial.print(F("deserializeJson() request body failed: "));
       Serial.println(error.f_str());
-      return server.send(400, "text/plain", BAD_REQUEST);
+      return server.send(400, PLAIN_TEXT, BAD_REQUEST);
     }
-    // doc = {"year": 2025, "month": 1, "day" : 3, "hour": 2, "minute": 34, "second": 0}
+    if (!Rtc.GetIsRunning()) {
+      Serial.println("RTC was not actively running, starting now");
+      Rtc.SetIsRunning(true);
+    }
     if (Rtc.GetIsWriteProtected()) {
       Rtc.SetIsWriteProtected(false);
     }
+    // doc = {"year": 2025, "month": 1, "day" : 3, "hour": 2, "minute": 34, "second": 0}
     RtcDateTime newTime(
       doc["year"], doc["month"], doc["day"], doc["hour"], doc["minute"], doc["second"]
     );
     Rtc.SetDateTime(newTime);
-    if (!Rtc.GetIsRunning()) {
-      Rtc.SetIsRunning(true);
-    }
     RtcDateTime now = Rtc.GetDateTime();
     if(now.IsValid()){
-      return server.send(200, "text/plain", "ok");
+      return server.send(200, JSON_APPLICATION, SUCCESS);
     }
-    return server.send(400, "text/plain", BAD_REQUEST);
+    return server.send(400, PLAIN_TEXT, BAD_REQUEST);
   });
 
   server.on("/cycles", HTTP_POST, []() {
