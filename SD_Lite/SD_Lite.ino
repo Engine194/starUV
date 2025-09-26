@@ -432,10 +432,8 @@ void checkCycles() {
       // Read cycle settings
       DynamicJsonDocument doc = readFile2(SD, "/config/admin.json", 7000);
       JsonArray cycles = doc["cycles"];
-      int totalCycles = doc["cycle_couter"].as<int>();
 
-      for (int i = 0; i < totalCycles; i++) {
-        JsonObject cycle = cycles[i];
+      for (JsonObject cycle : cycles) {
         if (cycle["id"].as<int>() == lastSelectedId) {
           int fanEnable = cycle["fan_enable"].as<int>();
           int fanDelay  = cycle["fan_delay"].as<int>();
@@ -485,20 +483,15 @@ void checkCycles() {
       return;
     } 
 
-    int totalCycles = doc["cycle_couter"] | cycles.size(); 
-
     int selectedId = -1;
     JsonObject selectedCycle;
     
-    for (int i = 0; i < totalCycles; i++) {
-      JsonObject cycle = cycles[i];
-      if (cycle.isNull()) continue;
-
+    for (JsonObject cycle : cycles) {
       int startM = timeToMinutes(cycle["start"].as<String>());
       int endM   = timeToMinutes(cycle["end"].as<String>());
       int status = cycle["status"].as<int>();
 
-      if (cycle["day"][weekday] == 1 && nowMinutes >= startM && nowMinutes <= endM && status == 1) {
+      if (status == 1 && cycle["day"][weekday] == 1 && nowMinutes >= startM && nowMinutes <= endM) {
         int cid = cycle["id"].as<int>();
         if (selectedId == -1 || cid < selectedId) {
           selectedId = cid;
