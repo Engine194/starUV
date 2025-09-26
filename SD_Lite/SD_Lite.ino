@@ -516,7 +516,7 @@ void loop()
 {
   ArduinoOTA.handle();
   server.handleClient();
-  delay(1000); // allow the cpu to switch to other tasks
+  delay(2); // allow the cpu to switch to other tasks
   checkCycles();
-  delay(1000);
+  delay(2);
 }
