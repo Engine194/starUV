@@ -496,9 +496,9 @@ void checkCycles() {
 
       int startM = timeToMinutes(cycle["start"].as<String>());
       int endM   = timeToMinutes(cycle["end"].as<String>());
+      int status = cycle["status"].as<int>();
 
-      if (cycle["day"][weekday] == 1 &&
-          nowMinutes >= startM && nowMinutes <= endM) {
+      if (cycle["day"][weekday] == 1 && nowMinutes >= startM && nowMinutes <= endM && status == 1) {
         int cid = cycle["id"].as<int>();
         if (selectedId == -1 || cid < selectedId) {
           selectedId = cid;
